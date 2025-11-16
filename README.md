@@ -31,17 +31,7 @@ GoScout is a fast, lightweight, and **completely local** secret scanner for scan
 ```bash
 git clone https://github.com/deadroot/goscout.git
 cd goscout
-go build -o goscout ./cmd/goscout/main.go
-```
-
-### Add to PATH
-
-```bash
-# Copy to a location in your PATH
-sudo cp goscout /usr/local/bin/
-
-# Or use it directly
-./goscout /path/to/scan
+make install # automatically adds to /usr/local/bin
 ```
 
 ## Quick Start
