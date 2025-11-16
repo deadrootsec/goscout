@@ -1,0 +1,75 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+coverage.out
+coverage.html
+
+# Go workspace file
+go.work
+
+# Dependency directories
+vendor/
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build outputs
+bin/
+dist/
+build/
+goscout
+goscout-*
+
+# Test coverage
+*.coverprofile
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Log files
+*.log
+
+# IDE specific
+*.iml
+.gradle/
+.classpath
+.project
+.settings/
+
+# Node modules (if used for anything)
+node_modules/
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Backup files
+*.bak
+*.backup
