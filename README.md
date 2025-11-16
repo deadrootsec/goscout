@@ -1,2 +1,2 @@
-# rscout
-RScout is simple secrets scanning tool
+# goscout
+GoScout is simple secrets scanning tool
