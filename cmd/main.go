@@ -5,13 +5,14 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/deadrootsec/goscout/pkg/llm"
 	"github.com/deadrootsec/goscout/pkg/report"
 	"github.com/deadrootsec/goscout/pkg/scanner"
 	"github.com/spf13/cobra"
 )
 
 var (
-	version = "0.1.0"
+	version = "0.2.0"
 )
 
 var (
@@ -23,6 +24,8 @@ var (
 	versionFlag  bool
 	jsonOutput   bool
 	showPatterns bool
+	logAIPath    string
+	logAIPrompt  string
 )
 
 var rootCmd = &cobra.Command{
@@ -48,6 +51,14 @@ Example:
 			return listPatterns()
 		}
 
+		// Handle log AI analysis
+		if logAIPath != "" {
+			if logAIPrompt == "" {
+				return fmt.Errorf("--prompt is required when using --logai")
+			}
+			return analyzeLogWithAI(logAIPath, logAIPrompt)
+		}
+
 		// Default to scanning current directory
 		scanPath := "."
 		if len(args) > 0 {
@@ -67,6 +78,8 @@ func init() {
 	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Show version")
 	rootCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output JSON format (shorthand for --format json)")
 	rootCmd.Flags().BoolVar(&showPatterns, "list-patterns", false, "List all available patterns")
+	rootCmd.Flags().StringVar(&logAIPath, "logai", "", "Path to log file to analyze with local LLM (requires --prompt)")
+	rootCmd.Flags().StringVar(&logAIPrompt, "prompt", "", "Prompt for LLM analysis of log file (use with --logai)")
 }
 
 func main() {
@@ -137,6 +150,37 @@ func performScan(scanPath string) error {
 	if len(results.Matches) > 0 {
 		os.Exit(1)
 	}
+
+	return nil
+}
+
+func analyzeLogWithAI(logPath, prompt string) error {
+	fmt.Fprintf(os.Stderr, "🤖 Analyzing log file with local LLM...\n")
+	fmt.Fprintf(os.Stderr, "📄 Log file: %s\n", logPath)
+	fmt.Fprintf(os.Stderr, "💬 Prompt: %s\n\n", prompt)
+
+	// Create analyzer with default settings (qwen:1.8b)
+	analyzer := llm.NewLogAnalyzer()
+
+	// Verify Ollama is running
+	fmt.Fprintf(os.Stderr, "⏳ Checking Ollama connection...\n")
+	if err := analyzer.HealthCheck(); err != nil {
+		return fmt.Errorf("❌ %w\nMake sure Ollama is running: ollama serve", err)
+	}
+
+	// Analyze the log file
+	fmt.Fprintf(os.Stderr, "⏳ Querying %s model...\n\n", analyzer.Model)
+	result, err := analyzer.AnalyzeLogFile(logPath, prompt)
+	if err != nil {
+		return fmt.Errorf("❌ Analysis failed: %w", err)
+	}
+
+	// Output results
+	fmt.Fprintf(os.Stderr, "✅ Analysis complete\n")
+	fmt.Fprintf(os.Stderr, "⏱️  Duration: %.2f seconds\n\n", result.Duration.Seconds())
+	fmt.Fprintf(os.Stderr, "────────────────────────────────────────────────────────\n\n")
+	fmt.Println(result.Findings)
+	fmt.Fprintf(os.Stderr, "\n────────────────────────────────────────────────────────\n")
 
 	return nil
 }
