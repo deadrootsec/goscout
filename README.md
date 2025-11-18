@@ -1,12 +1,20 @@
-# GoScout - Secret Scanner
+# GoScout - Universal Scout for Security Intelligence
 
-GoScout is a fast, lightweight, and **completely local** secret scanner for scanning repositories and codebases for exposed secrets, API keys, passwords, and other sensitive information.
+GoScout is a fast, lightweight, and **completely local** universal scout tool for scanning your local machine, system logs, and codebases. It intelligently detects exposed secrets, sensitive patterns, and security concerns using both pattern matching and AI-powered analysis.
+
+## Overview
+
+GoScout goes beyond simple repository scanning. It's your personal security scout that can:
+- 🔍 Scan local machines for sensitive data (coming soon)
+- 📋 Analyze system logs for security anomalies
+- 🗂️ Search repositories for exposed secrets and credentials
+- 🤖 Use AI capabilities to detect secrets and analyze logs (coming soon)
 
 ## Features
 
 ✨ **Zero External Dependencies** - No data is sent anywhere. Everything runs locally.
 
-🚀 **Fast Scanning** - Efficiently scans large codebases with intelligent file filtering.
+🚀 **Fast Scanning** - Efficiently scans large codebases, logs, and file systems with intelligent filtering.
 
 🎯 **Comprehensive Pattern Detection** - Detects 25+ types of secrets including:
 - AWS credentials (Access Keys, Secret Keys, Session Tokens)
@@ -18,11 +26,15 @@ GoScout is a fast, lightweight, and **completely local** secret scanner for scan
 - Slack webhooks
 - And more...
 
-🔧 **Flexible Configuration** - Customize which directories and files to scan.
+🤖 **AI-Powered Analysis** - Coming soon: Advanced detection and log analysis using machine learning
+
+🔧 **Flexible Configuration** - Customize which directories, files, and patterns to scan.
 
 📊 **Multiple Output Formats** - Text, JSON, and table formats for easy integration.
 
-⚡ **High & Medium Severity Filtering** - Focus on the most critical secrets.
+⚡ **Severity Filtering** - Focus on the most critical findings with high, medium, and low severity levels.
+
+🔐 **Multi-Target Scanning** - Scan local machines, system logs, repositories, and more.
 
 ## Installation
 
@@ -46,6 +58,11 @@ goscout
 Scan a specific directory:
 ```bash
 goscout /path/to/repo
+```
+
+Scan system logs:
+```bash
+goscout --logai /path/to/logfile.log --prompt "look for unauthorized access attempts, failed logins, and suspicious patterns"
 ```
 
 ### Examples
@@ -291,19 +308,19 @@ scan_secrets:
     - ./goscout . --severity high
 ```
 
-### Regular Repository Audit
+### System Audit
 
 ```bash
 #!/bin/bash
-# audit.sh - Run daily secret scans
+# audit.sh - Scan local machine for exposed secrets
 
-REPO_PATH="/path/to/repo"
-OUTPUT_FILE="scan_results_$(date +%Y%m%d).json"
+HOME_PATH="/home/username"
+OUTPUT_FILE="security_scan_$(date +%Y%m%d).json"
 
-goscout "$REPO_PATH" --json > "$OUTPUT_FILE"
+goscout "$HOME_PATH" --json > "$OUTPUT_FILE"
 
 if [ $? -ne 0 ]; then
-    echo "Secrets found! Check $OUTPUT_FILE"
+    echo "Potential security issues found! Check $OUTPUT_FILE"
     # Send alert or notification
 fi
 ```
@@ -312,23 +329,48 @@ fi
 ## Project Structure
 
 ```
-goscout/
-├── cmd/
-│   └── main.go              
-├── pkg/
-│   ├── patterns/
-│   │   ├── patterns.go          
-│   │   └── patterns_test.go     
-│   ├── scanner/
-│   │   ├── scanner.go           
-│   │   └── scanner_test.go      
-│   └── report/
-│       └── reporter.go                                
-├── go.mod                       
-├── go.sum                       
-├── README.md                    
-└── LICENSE                      
+.
+├── cmd
+│   └── main.go
+├── go.mod
+├── goscout
+├── go.sum
+├── LICENSE
+├── Makefile
+├── pkg
+│   ├── llm
+│   │   ├── analyzer.go
+│   │   └── analyzer_test.go
+│   ├── patterns
+│   │   ├── patterns.go
+│   │   └── patterns_test.go
+│   ├── report
+│   │   └── reporter.go
+│   ├── scanner
+│   │   ├── scanner.go
+│   │   └── scanner_test.go
+│   └── utils
+│       ├── utils.go
+│       └── utils_test.go
+├── README.md
+└── TROUBLESHOOTING.md                     
 ```
+
+## Current Capabilities & Roadmap
+
+### Current Features
+- Pattern-based secret detection (25+ patterns)
+- Fast file and directory scanning
+- Multiple output formats
+- Configurable exclusions
+- Severity-based filtering
+
+### Coming Soon
+- 🤖 AI-powered secret detection
+- 📊 Advanced log analysis with machine learning
+- 🎯 Behavioral anomaly detection
+- 🔔 Real-time monitoring capabilities
+- 📈 Comprehensive reporting and visualization
 
 ## Current Limitations
 
@@ -347,16 +389,15 @@ GoScout may occasionally flag:
 
 Review flagged items carefully and add files to exclusion lists if needed.
 
-
 ## Security
 
-GoScout is designed with security in mind:
+GoScout is designed with security and privacy in mind:
 
 - No internet connectivity required
-- No data collection
-- All scanning happens locally
-- Open source for transparency
-- Run it with confidence on any codebase
+- No data collection or transmission
+- All scanning happens locally on your machine
+- Open source for full transparency
+- Run it with confidence on any codebase or system
 
 ## License
 
@@ -364,4 +405,4 @@ MIT License - See LICENSE file for details
 
 ## Disclaimer
 
-GoScout is a pattern-matching tool and is not a guarantee that all secrets will be found. It should be used as one part of a comprehensive security strategy. Always perform thorough security reviews and follow best practices for secret management.
+GoScout is a pattern-matching and analysis tool and is not a guarantee that all secrets will be found. It should be used as one part of a comprehensive security strategy. Always perform thorough security reviews and follow best practices for secret management and system hardening.
