@@ -15,7 +15,7 @@ const (
 	// OllamaDefaultURL is the default Ollama server endpoint
 	OllamaDefaultURL = "http://localhost:11434"
 	// DefaultModel is the recommended model for best performance on small systems
-	DefaultModel = "qiuchen/qwen1.5.1.8b-chat"
+	DefaultModel = "qiuchen/qwen1.5.1.8b-chat:latest"
 	// RequestTimeout is the timeout for LLM requests
 	RequestTimeout = 5 * time.Minute
 	// MaxLogSize limits log file size to 50KB for small model performance
