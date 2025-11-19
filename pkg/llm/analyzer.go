@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -13,10 +14,11 @@ import (
 
 const (
 	OllamaDefaultURL = "http://localhost:11434"
-	DefaultModel     = "qiuchen/qwen1.5-1.8b-chat:latest"
+	DefaultModel     = "qwen2.5:1.5b"
 	RequestTimeout   = 30 * time.Minute
 	MaxLogSize       = 250 * 1024
 	MaxLines         = 5000
+	ChunkLines       = 2000
 )
 
 // LogAnalyzer handles communication with Ollama for log analysis
@@ -88,61 +90,78 @@ func (la *LogAnalyzer) HealthCheck() error {
 	return nil
 }
 
-// AnalyzeLogFile reads a log file and analyzes it with the LLM
-func (la *LogAnalyzer) AnalyzeLogFile(logPath, userPrompt string) (*AnalysisResult, error) {
+// AnalyzeLogFileChunked reads a log file and analyzes it in chunks
+func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, scanSecrets bool) (string, error) {
 	// Read log file
-	logContent, err := readLogFile(logPath)
+	file, err := os.Open(logPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read log file: %w", err)
-	}
-
-	// Build the prompt for analysis
-	prompt := buildAnalysisPrompt(userPrompt, logContent)
-
-	// Send request to Ollama
-	result, err := la.queryOllama(prompt)
-	if err != nil {
-		return nil, err
-	}
-
-	return result, nil
-}
-
-// readLogFile reads a log file, limiting size for small model performance
-func readLogFile(filePath string) (string, error) {
-	file, err := os.Open(filePath)
-	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to open log file: %w", err)
 	}
 	defer file.Close()
 
-	// Read file content with size limit
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return "", err
+	// Split file into chunks by lines
+	chunks := make([]string, 0)
+	var currentChunk strings.Builder
+	var lineCount int
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		currentChunk.WriteString(line)
+		currentChunk.WriteString("\n")
+		lineCount++
+
+		if lineCount >= ChunkLines {
+			chunks = append(chunks, currentChunk.String())
+			currentChunk.Reset()
+			lineCount = 0
+		}
 	}
 
-	content := string(data)
-
-	// If file is too large, use last MaxLogSize bytes
-	if len(content) > MaxLogSize {
-		content = content[len(content)-MaxLogSize:]
-		fmt.Fprintf(os.Stderr, "⚠️  Log file truncated to last 15KB for performance\n")
+	// Add remaining lines as final chunk
+	if currentChunk.Len() > 0 {
+		chunks = append(chunks, currentChunk.String())
 	}
 
-	return content, nil
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("error reading log file: %w", err)
+	}
+
+	if len(chunks) == 0 {
+		return "", fmt.Errorf("log file is empty")
+	}
+
+	// Analyze each chunk
+	var results strings.Builder
+	for i, chunk := range chunks {
+		fmt.Fprintf(os.Stderr, "📊 Processing chunk %d/%d...\n", i+1, len(chunks))
+
+		prompt := buildChunkAnalysisPrompt(chunk, scanSecrets)
+		result, err := la.queryOllama(prompt)
+		if err != nil {
+			return "", fmt.Errorf("failed to analyze chunk %d: %w", i+1, err)
+		}
+
+		results.WriteString(fmt.Sprintf("=== Chunk %d Summary ===\n", i+1))
+		results.WriteString(result.Findings)
+		results.WriteString("\n\n")
+	}
+
+	return results.String(), nil
 }
 
-func buildAnalysisPrompt(userPrompt, logContent string) string {
-	return fmt.Sprintf(`Analyze this log. Task: %s
-
-Instructions:
-- Output ONLY information related to the task
-- Be concise and direct
-- No extra commentary
+func buildChunkAnalysisPrompt(logContent string, scanSecrets bool) string {
+	if scanSecrets {
+		return fmt.Sprintf(`Analyze this log chunk for secrets, errors and information.
+Output only findings of secrets, errors or general data found, nothing else.
 
 Log:
-%s`, userPrompt, logContent)
+%s`, logContent)
+	}
+	return fmt.Sprintf(`Summarize this log chunk. Output only key information found in the logs, no suggestions or recommendations.
+
+Log:
+%s`, logContent)
 }
 
 // queryOllama sends the analysis prompt to Ollama and gets response

@@ -3,11 +3,8 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/deadrootsec/goscout/pkg/llm"
-	"github.com/deadrootsec/goscout/pkg/report"
-	"github.com/deadrootsec/goscout/pkg/scanner"
 	"github.com/spf13/cobra"
 )
 
@@ -16,29 +13,20 @@ var (
 )
 
 var (
-	format       string
-	maxFileSize  int64
-	excludeDirs  []string
-	excludeFiles []string
-	severity     string
-	versionFlag  bool
-	jsonOutput   bool
-	showPatterns bool
 	logAIPath    string
-	logAIPrompt  string
+	secretsScan  bool
+	versionFlag  bool
+	showPatterns bool
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "goscout [path]",
-	Short: "GoScout - Local Secret Scanner",
-	Long: `GoScout is a simple and fast secret scanner for scanning repositories.
-It scans your codebase locally without sending data to any external service.
+	Use:   "goscout",
+	Short: "GoScout - Your local scout agent",
+	Long: `GoScout can analyze log files, search for secrets in repo, and many more.
 
-Example:
-  goscout .
-  goscout /path/to/repo
-  goscout . --format json
-  goscout . --severity high`,
+Examples:
+  goscout --logai /path/to/log.txt
+  goscout --secrets /path/to/repo`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Handle version flag
 		if versionFlag {
@@ -53,33 +41,19 @@ Example:
 
 		// Handle log AI analysis
 		if logAIPath != "" {
-			if logAIPrompt == "" {
-				return fmt.Errorf("--prompt is required when using --logai")
-			}
-			return analyzeLogWithAI(logAIPath, logAIPrompt)
+			return analyzeLogWithAI(logAIPath, secretsScan)
 		}
 
-		// Default to scanning current directory
-		scanPath := "."
-		if len(args) > 0 {
-			scanPath = args[0]
-		}
-
-		return performScan(scanPath)
+		// If no flags provided, show help
+		return cmd.Help()
 	},
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&format, "format", "f", "text", "Output format (text, json, table)")
-	rootCmd.Flags().Int64VarP(&maxFileSize, "max-size", "s", 10*1024*1024, "Max file size to scan in bytes (default 10MB)")
-	rootCmd.Flags().StringSliceVar(&excludeDirs, "exclude-dirs", nil, "Additional directories to exclude")
-	rootCmd.Flags().StringSliceVar(&excludeFiles, "exclude-files", nil, "Additional files to exclude")
-	rootCmd.Flags().StringVarP(&severity, "severity", "S", "", "Filter results by severity (high, medium, low)")
+	rootCmd.Flags().StringVar(&logAIPath, "logai", "", "Path to log file to analyze with local LLM")
+	rootCmd.Flags().BoolVar(&secretsScan, "secrets", false, "Scan for secrets in repo")
 	rootCmd.Flags().BoolVarP(&versionFlag, "version", "v", false, "Show version")
-	rootCmd.Flags().BoolVar(&jsonOutput, "json", false, "Output JSON format (shorthand for --format json)")
-	rootCmd.Flags().BoolVar(&showPatterns, "list-patterns", false, "List all available patterns")
-	rootCmd.Flags().StringVar(&logAIPath, "logai", "", "Path to log file to analyze with local LLM (requires --prompt)")
-	rootCmd.Flags().StringVar(&logAIPrompt, "prompt", "", "Prompt for LLM analysis of log file (use with --logai)")
+	rootCmd.Flags().BoolVar(&showPatterns, "list-patterns", false, "List all available secret patterns")
 }
 
 func main() {
@@ -89,77 +63,11 @@ func main() {
 	}
 }
 
-func performScan(scanPath string) error {
-	// Handle json shorthand
-	if jsonOutput {
-		format = "json"
-	}
-
-	// Validate path exists
-	if _, err := os.Stat(scanPath); os.IsNotExist(err) {
-		return fmt.Errorf("path does not exist: %s", scanPath)
-	}
-
-	// Get absolute path
-	absPath, err := filepath.Abs(scanPath)
-	if err != nil {
-		return fmt.Errorf("failed to get absolute path: %w", err)
-	}
-
-	fmt.Fprintf(os.Stderr, "🔍 Scanning: %s\n", absPath)
-	fmt.Fprintf(os.Stderr, "📋 Format: %s\n\n", format)
-
-	// Create and configure scanner
-	sc := scanner.NewScanner()
-	sc.SetMaxFileSize(maxFileSize)
-
-	// Add excluded directories
-	for _, dir := range excludeDirs {
-		sc.AddExcludeDir(dir)
-	}
-
-	// Add excluded files
-	for _, file := range excludeFiles {
-		sc.AddExcludeFile(file)
-	}
-
-	// Perform scan
-	results, err := sc.ScanPath(absPath)
-	if err != nil {
-		return fmt.Errorf("scan failed: %w", err)
-	}
-
-	// Filter by severity if specified
-	if severity != "" {
-		filtered := make([]*scanner.Match, 0)
-		for _, match := range results.Matches {
-			if match.Pattern.Severity == severity {
-				filtered = append(filtered, match)
-			}
-		}
-		results.Matches = filtered
-	}
-
-	// Generate report
-	reporter := report.NewReporter(os.Stdout, format)
-	if err := reporter.GenerateReport(results.Matches, results.FilesScanned, results.FilesSkipped); err != nil {
-		return fmt.Errorf("failed to generate report: %w", err)
-	}
-
-	// Exit with error code if issues found
-	if len(results.Matches) > 0 {
-		os.Exit(1)
-	}
-
-	return nil
-}
-
-func analyzeLogWithAI(logPath, prompt string) error {
+func analyzeLogWithAI(logPath string, scanSecrets bool) error {
 	fmt.Fprintf(os.Stderr, "🤖 Analyzing log file with local LLM...\n")
-	fmt.Fprintf(os.Stderr, "📄 Log file: %s\n", logPath)
-	fmt.Fprintf(os.Stderr, "💬 Prompt: %s\n\n", prompt)
+	fmt.Fprintf(os.Stderr, "📄 Log file: %s\n\n", logPath)
 
-	// Create analyzer with default settings (qwen:1.8b)
+	// Create analyzer with default settings
 	analyzer := llm.NewLogAnalyzer()
 
 	// Verify Ollama is running
@@ -168,19 +76,18 @@ func analyzeLogWithAI(logPath, prompt string) error {
 		return fmt.Errorf("❌ %w\nMake sure Ollama is running: ollama serve", err)
 	}
 
-	// Analyze the log file
+	// Analyze the log file in chunks
 	fmt.Fprintf(os.Stderr, "⏳ Querying %s model...\n\n", analyzer.Model)
-	result, err := analyzer.AnalyzeLogFile(logPath, prompt)
+	result, err := analyzer.AnalyzeLogFileChunked(logPath, scanSecrets)
 	if err != nil {
 		return fmt.Errorf("❌ Analysis failed: %w", err)
 	}
 
 	// Output results
-	fmt.Fprintf(os.Stderr, "✅ Analysis complete\n")
-	fmt.Fprintf(os.Stderr, "⏱️  Duration: %.2f seconds\n\n", result.Duration.Seconds())
 	fmt.Fprintf(os.Stderr, "────────────────────────────────────────────────────────\n\n")
-	fmt.Println(result.Findings)
+	fmt.Println(result)
 	fmt.Fprintf(os.Stderr, "\n────────────────────────────────────────────────────────\n")
+	fmt.Fprintf(os.Stderr, "✅ Analysis complete\n")
 
 	return nil
 }
