@@ -91,7 +91,7 @@ func (la *LogAnalyzer) HealthCheck() error {
 }
 
 // AnalyzeLogFileChunked reads a log file and analyzes it in chunks
-func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, scanSecrets bool) (string, error) {
+func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, _ bool) (string, error) {
 	// Read log file
 	file, err := os.Open(logPath)
 	if err != nil {
@@ -136,7 +136,7 @@ func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, scanSecrets bool) (
 	for i, chunk := range chunks {
 		fmt.Fprintf(os.Stderr, "📊 Processing chunk %d/%d...\n", i+1, len(chunks))
 
-		prompt := buildChunkAnalysisPrompt(chunk, scanSecrets)
+		prompt := buildChunkAnalysisPrompt(chunk)
 		result, err := la.queryOllama(prompt)
 		if err != nil {
 			return "", fmt.Errorf("failed to analyze chunk %d: %w", i+1, err)
@@ -150,15 +150,8 @@ func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, scanSecrets bool) (
 	return results.String(), nil
 }
 
-func buildChunkAnalysisPrompt(logContent string, scanSecrets bool) string {
-	if scanSecrets {
-		return fmt.Sprintf(`Analyze this log chunk for secrets, errors and information.
-Output only findings of secrets, errors or general data found, nothing else.
-
-Log:
-%s`, logContent)
-	}
-	return fmt.Sprintf(`Summarize this log chunk. Output only key information found in the logs, no suggestions or recommendations.
+func buildChunkAnalysisPrompt(logContent string) string {
+	return fmt.Sprintf(`Summarize this log chunk. Output only the key information found in the logs. Do not provide suggestions, recommendations, or improvements.
 
 Log:
 %s`, logContent)
