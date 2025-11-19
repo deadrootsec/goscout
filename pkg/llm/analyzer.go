@@ -1,31 +1,27 @@
 package llm
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 )
 
 const (
-	OllamaDefaultURL = "http://localhost:11434"
-	DefaultModel     = "qwen2.5:1.5b"
-	RequestTimeout   = 30 * time.Minute
-	MaxLogSize       = 250 * 1024
-	MaxLines         = 5000
-	ChunkLines       = 2000
+	OllamaDefaultURL  = "http://localhost:11434"
+	DefaultModel      = "qwen2.5:1.5b"
+	DefaultChunkLines = 2000
+	RequestTimeout    = 30 * time.Minute
 )
 
-// LogAnalyzer handles communication with Ollama for log analysis
-type LogAnalyzer struct {
-	OllamaURL string
-	Model     string
-	Client    *http.Client
+// Analyzer handles communication with Ollama for analysis
+type Analyzer struct {
+	OllamaURL  string
+	Model      string
+	ChunkLines int
+	Client     *http.Client
 }
 
 // OllamaRequest represents a request to Ollama API
@@ -49,11 +45,12 @@ type AnalysisResult struct {
 	Duration time.Duration
 }
 
-// NewLogAnalyzer creates a new log analyzer with default settings
-func NewLogAnalyzer() *LogAnalyzer {
-	return &LogAnalyzer{
-		OllamaURL: OllamaDefaultURL,
-		Model:     DefaultModel,
+// NewAnalyzer creates a new analyzer with default settings
+func NewAnalyzer() *Analyzer {
+	return &Analyzer{
+		OllamaURL:  OllamaDefaultURL,
+		Model:      DefaultModel,
+		ChunkLines: DefaultChunkLines,
 		Client: &http.Client{
 			Timeout: RequestTimeout,
 		},
@@ -61,25 +58,32 @@ func NewLogAnalyzer() *LogAnalyzer {
 }
 
 // SetModel sets the model to use for analysis
-func (la *LogAnalyzer) SetModel(model string) {
-	la.Model = model
+func (a *Analyzer) SetModel(model string) {
+	a.Model = model
+}
+
+// SetChunkLines sets the number of lines per chunk for analysis
+func (a *Analyzer) SetChunkLines(lines int) {
+	if lines > 0 {
+		a.ChunkLines = lines
+	}
 }
 
 // SetOllamaURL sets the Ollama server URL
-func (la *LogAnalyzer) SetOllamaURL(url string) {
-	la.OllamaURL = url
+func (a *Analyzer) SetOllamaURL(url string) {
+	a.OllamaURL = url
 }
 
 // HealthCheck verifies that Ollama is running
-func (la *LogAnalyzer) HealthCheck() error {
-	req, err := http.NewRequest("GET", la.OllamaURL+"/api/tags", nil)
+func (a *Analyzer) HealthCheck() error {
+	req, err := http.NewRequest("GET", a.OllamaURL+"/api/tags", nil)
 	if err != nil {
 		return fmt.Errorf("failed to create health check request: %w", err)
 	}
 
-	resp, err := la.Client.Do(req)
+	resp, err := a.Client.Do(req)
 	if err != nil {
-		return fmt.Errorf("ollama server not responding at %s: %w", la.OllamaURL, err)
+		return fmt.Errorf("ollama server not responding at %s: %w", a.OllamaURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -90,77 +94,10 @@ func (la *LogAnalyzer) HealthCheck() error {
 	return nil
 }
 
-// AnalyzeLogFileChunked reads a log file and analyzes it in chunks
-func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, _ bool) (string, error) {
-	// Read log file
-	file, err := os.Open(logPath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open log file: %w", err)
-	}
-	defer file.Close()
-
-	// Split file into chunks by lines
-	chunks := make([]string, 0)
-	var currentChunk strings.Builder
-	var lineCount int
-
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		currentChunk.WriteString(line)
-		currentChunk.WriteString("\n")
-		lineCount++
-
-		if lineCount >= ChunkLines {
-			chunks = append(chunks, currentChunk.String())
-			currentChunk.Reset()
-			lineCount = 0
-		}
-	}
-
-	// Add remaining lines as final chunk
-	if currentChunk.Len() > 0 {
-		chunks = append(chunks, currentChunk.String())
-	}
-
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("error reading log file: %w", err)
-	}
-
-	if len(chunks) == 0 {
-		return "", fmt.Errorf("log file is empty")
-	}
-
-	// Analyze each chunk
-	var results strings.Builder
-	for i, chunk := range chunks {
-		fmt.Fprintf(os.Stderr, "📊 Processing chunk %d/%d...\n", i+1, len(chunks))
-
-		prompt := buildChunkAnalysisPrompt(chunk)
-		result, err := la.queryOllama(prompt)
-		if err != nil {
-			return "", fmt.Errorf("failed to analyze chunk %d: %w", i+1, err)
-		}
-
-		results.WriteString(fmt.Sprintf("=== Chunk %d Summary ===\n", i+1))
-		results.WriteString(result.Findings)
-		results.WriteString("\n\n")
-	}
-
-	return results.String(), nil
-}
-
-func buildChunkAnalysisPrompt(logContent string) string {
-	return fmt.Sprintf(`You must respond in English only. Summarize this log chunk. Output only the key information found in the logs. Do not provide suggestions, recommendations, or improvements.
-
-Log:
-%s`, logContent)
-}
-
-// queryOllama sends the analysis prompt to Ollama and gets response
-func (la *LogAnalyzer) queryOllama(prompt string) (*AnalysisResult, error) {
+// Query sends a prompt to Ollama and gets the response
+func (a *Analyzer) Query(prompt string) (*AnalysisResult, error) {
 	reqBody := OllamaRequest{
-		Model:  la.Model,
+		Model:  a.Model,
 		Prompt: prompt,
 		Stream: false,
 	}
@@ -170,7 +107,7 @@ func (la *LogAnalyzer) queryOllama(prompt string) (*AnalysisResult, error) {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest("POST", la.OllamaURL+"/api/generate", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", a.OllamaURL+"/api/generate", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -178,7 +115,7 @@ func (la *LogAnalyzer) queryOllama(prompt string) (*AnalysisResult, error) {
 	req.Header.Set("Content-Type", "application/json")
 
 	startTime := time.Now()
-	resp, err := la.Client.Do(req)
+	resp, err := a.Client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query ollama: %w", err)
 	}
@@ -203,8 +140,8 @@ func (la *LogAnalyzer) queryOllama(prompt string) (*AnalysisResult, error) {
 	duration := time.Since(startTime)
 
 	return &AnalysisResult{
-		Findings: strings.TrimSpace(ollamaResp.Response),
-		Model:    la.Model,
+		Findings: ollamaResp.Response,
+		Model:    a.Model,
 		Duration: duration,
 	}, nil
 }

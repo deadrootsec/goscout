@@ -10,8 +10,8 @@ import (
 	"github.com/fatih/color"
 )
 
-// Reporter handles generating reports in different formats
-type Reporter struct {
+// Report handles all report generation and output
+type Report struct {
 	writer io.Writer
 	format string
 }
@@ -47,31 +47,51 @@ type Stats struct {
 	FilesSkipped int `json:"files_skipped"`
 }
 
-// NewReporter creates a new reporter
-func NewReporter(writer io.Writer, format string) *Reporter {
-	return &Reporter{
+// AnalysisReport represents an AI analysis report
+type AnalysisReport struct {
+	Title     string
+	Model     string
+	Content   string
+	Duration  string
+	Timestamp string
+}
+
+// NewReport creates a new report
+func NewReport(writer io.Writer, format string) *Report {
+	return &Report{
 		writer: writer,
 		format: format,
 	}
 }
 
-// GenerateReport generates a report from scan results
-func (r *Reporter) GenerateReport(matches []*scanner.Match, filesScanned, filesSkipped int) error {
+// GenerateSecrets generates a report from secret scan results
+func (r *Report) GenerateSecrets(matches []*scanner.Match, filesScanned, filesSkipped int) error {
 	switch r.format {
 	case "json":
-		return r.generateJSON(matches, filesScanned, filesSkipped)
+		return r.generateSecretsJSON(matches, filesScanned, filesSkipped)
 	case "table":
-		return r.generateTable(matches, filesScanned, filesSkipped)
+		return r.generateSecretsTable(matches, filesScanned, filesSkipped)
 	case "text", "":
-		return r.generateText(matches, filesScanned, filesSkipped)
+		return r.generateSecretsText(matches, filesScanned, filesSkipped)
 	default:
 		return fmt.Errorf("unsupported report format: %s", r.format)
 	}
 }
 
-// generateJSON generates a JSON formatted report
-func (r *Reporter) generateJSON(matches []*scanner.Match, filesScanned, filesSkipped int) error {
-	// Convert matches to report format
+// GenerateAnalysis generates a report from AI analysis
+func (r *Report) GenerateAnalysis(analysis *AnalysisReport) error {
+	fmt.Fprintf(r.writer, "────────────────────────────────────────────────────────\n\n")
+	fmt.Fprintf(r.writer, "📊 %s\n", analysis.Title)
+	fmt.Fprintf(r.writer, "🤖 Model: %s\n", analysis.Model)
+	fmt.Fprintf(r.writer, "⏱️  Duration: %s\n\n", analysis.Duration)
+	fmt.Fprintf(r.writer, "────────────────────────────────────────────────────────\n\n")
+	fmt.Fprint(r.writer, analysis.Content)
+	fmt.Fprintf(r.writer, "\n\n────────────────────────────────────────────────────────\n")
+	return nil
+}
+
+// generateSecretsJSON generates a JSON formatted report
+func (r *Report) generateSecretsJSON(matches []*scanner.Match, filesScanned, filesSkipped int) error {
 	reportMatches := make([]*MatchReport, len(matches))
 	summary := &Summary{}
 
@@ -110,8 +130,8 @@ func (r *Reporter) generateJSON(matches []*scanner.Match, filesScanned, filesSki
 	return encoder.Encode(report)
 }
 
-// generateText generates a text formatted report
-func (r *Reporter) generateText(matches []*scanner.Match, filesScanned, filesSkipped int) error {
+// generateSecretsText generates a text formatted report
+func (r *Report) generateSecretsText(matches []*scanner.Match, filesScanned, filesSkipped int) error {
 	if len(matches) == 0 {
 		fmt.Fprintf(r.writer, "✓ No secrets found!\n")
 		fmt.Fprintf(r.writer, "Files scanned: %d\n", filesScanned)
@@ -178,7 +198,6 @@ func (r *Reporter) generateText(matches []*scanner.Match, filesScanned, filesSki
 			cyan.Fprintf(r.writer, "\n📄 %s\n", match.FilePath)
 		}
 
-		// Color based on severity
 		var severityColor *color.Color
 		var severityIcon string
 		switch match.Pattern.Severity {
@@ -204,14 +223,13 @@ func (r *Reporter) generateText(matches []*scanner.Match, filesScanned, filesSki
 	return nil
 }
 
-// generateTable generates a table formatted report
-func (r *Reporter) generateTable(matches []*scanner.Match, filesScanned, filesSkipped int) error {
+// generateSecretsTable generates a table formatted report
+func (r *Report) generateSecretsTable(matches []*scanner.Match, filesScanned, filesSkipped int) error {
 	if len(matches) == 0 {
 		fmt.Fprintf(r.writer, "No secrets found!\n")
 		return nil
 	}
 
-	// Sort matches by file and line number
 	sort.Slice(matches, func(i, j int) bool {
 		if matches[i].FilePath != matches[j].FilePath {
 			return matches[i].FilePath < matches[j].FilePath
@@ -219,7 +237,6 @@ func (r *Reporter) generateTable(matches []*scanner.Match, filesScanned, filesSk
 		return matches[i].LineNumber < matches[j].LineNumber
 	})
 
-	// Print header
 	fmt.Fprintf(r.writer, "%-50s | %-15s | %-10s | %-20s\n", "File", "Line", "Severity", "Pattern")
 	fmt.Fprintf(r.writer, "%-50s-+-%-15s-+-%-10s-+-%-20s\n",
 		"──────────────────────────────────────────────────",
@@ -227,7 +244,6 @@ func (r *Reporter) generateTable(matches []*scanner.Match, filesScanned, filesSk
 		"──────────",
 		"────────────────────")
 
-	// Print rows
 	for _, match := range matches {
 		filePath := match.FilePath
 		if len(filePath) > 50 {
@@ -254,4 +270,80 @@ func truncate(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen-3] + "..."
+}
+
+// PrintPatterns prints available secret patterns
+func PrintPatterns() {
+	patterns := []struct {
+		severity string
+		items    []string
+	}{
+		{
+			severity: "HIGH SEVERITY",
+			items: []string{
+				"AWS Access Key",
+				"AWS Secret Access Key",
+				"AWS Session Token",
+				"Generic API Key",
+				"Database Connection String",
+				"GitHub Personal Access Token",
+				"GitHub OAuth Token",
+				"RSA Private Key",
+				"OpenSSH Private Key",
+				"PGP Private Key",
+				"EC Private Key",
+				"Google API Key",
+				"Firebase Key",
+				"Slack Token",
+				"JWT Token",
+				"Stripe API Key",
+				"Twilio API Key",
+				"Heroku API Key",
+				"Basic Auth Credentials",
+			},
+		},
+		{
+			severity: "MEDIUM SEVERITY",
+			items: []string{
+				"Password in Code",
+				"Secret Assignment",
+				"Mailchimp API Key",
+				"PagerDuty Token",
+			},
+		},
+		{
+			severity: "LOW SEVERITY",
+			items: []string{
+				"Private IP Address",
+			},
+		},
+	}
+
+	fmt.Println("Available Secret Patterns:")
+	fmt.Println("─────────────────────────────────────────────────────────────")
+	fmt.Println("")
+
+	for _, group := range patterns {
+		fmt.Printf("%s:\n", group.severity)
+		for _, item := range group.items {
+			fmt.Printf("  - %s\n", item)
+		}
+		fmt.Println()
+	}
+}
+
+// GetProgressMessage returns a formatted progress message
+func GetProgressMessage(stage, detail string) string {
+	icons := map[string]string{
+		"scan":    "🔍",
+		"analyze": "🤖",
+		"process": "⚙️",
+		"check":   "✓",
+		"warning": "⚠️",
+	}
+	icon := icons[stage]
+	if icon == "" {
+		icon = "•"
+	}
+	return fmt.Sprintf("%s %s", icon, detail)
 }

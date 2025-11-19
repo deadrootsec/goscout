@@ -1,6 +1,6 @@
 # GoScout - Universal Scout for Security Intelligence
 
-GoScout is a fast, lightweight, and **completely local** universal scout tool for scanning your local machine, system logs, and codebases. It intelligently detects exposed secrets, sensitive patterns, and security concerns using both pattern matching and AI-powered analysis.
+GoScout is a fast and **completely local** universal scout tool for scanning your local machine, system logs, and codebases. It intelligently detects exposed secrets, sensitive patterns, and security concerns using both pattern matching and AI-powered analysis.
 
 ## Overview
 
