@@ -12,16 +12,11 @@ import (
 )
 
 const (
-	// OllamaDefaultURL is the default Ollama server endpoint
 	OllamaDefaultURL = "http://localhost:11434"
-	// DefaultModel is the recommended model for best performance on small systems
-	DefaultModel = "qiuchen/qwen1.5.1.8b-chat:latest"
-	// RequestTimeout is the timeout for LLM requests
-	RequestTimeout = 5 * time.Minute
-	// MaxLogSize limits log file size to 50KB for small model performance
-	MaxLogSize = 50 * 1024
-	// MaxLines limits the number of lines to process
-	MaxLines = 5000
+	DefaultModel     = "qiuchen/qwen1.5-1.8b-chat:latest"
+	RequestTimeout   = 30 * time.Minute
+	MaxLogSize       = 250 * 1024
+	MaxLines         = 5000
 )
 
 // LogAnalyzer handles communication with Ollama for log analysis
@@ -132,21 +127,22 @@ func readLogFile(filePath string) (string, error) {
 	// If file is too large, use last MaxLogSize bytes
 	if len(content) > MaxLogSize {
 		content = content[len(content)-MaxLogSize:]
-		fmt.Fprintf(os.Stderr, "⚠️  Log file truncated to last 50KB for performance\n")
+		fmt.Fprintf(os.Stderr, "⚠️  Log file truncated to last 15KB for performance\n")
 	}
 
 	return content, nil
 }
 
-// buildAnalysisPrompt constructs a compact prompt for LLM analysis
 func buildAnalysisPrompt(userPrompt, logContent string) string {
-	return fmt.Sprintf(`You are a log security analyst. Analyze this log for:
-%s
+	return fmt.Sprintf(`Analyze this log. Task: %s
+
+Instructions:
+- Output ONLY information related to the task
+- Be concise and direct
+- No extra commentary
 
 Log:
-%s
-
-Findings:`, userPrompt, logContent)
+%s`, userPrompt, logContent)
 }
 
 // queryOllama sends the analysis prompt to Ollama and gets response
