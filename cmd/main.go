@@ -36,8 +36,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "goscout",
-	Short: "GoScout - Local Secret Scanner and Log Analyzer",
-	Long: `GoScout scans repositories for secrets and analyzes logs using local LLM.
+	Short: "GoScout - tool for scouting your machine, logs, repos and many more",
+	Long: `GoScout scans repositories for secrets, machines for interesting information and logs and analysis it using local LLM.
 All processing happens locally without sending data to external services.
 
 Examples:
