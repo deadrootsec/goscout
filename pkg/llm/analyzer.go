@@ -151,7 +151,7 @@ func (la *LogAnalyzer) AnalyzeLogFileChunked(logPath string, _ bool) (string, er
 }
 
 func buildChunkAnalysisPrompt(logContent string) string {
-	return fmt.Sprintf(`Summarize this log chunk. Output only the key information found in the logs. Do not provide suggestions, recommendations, or improvements.
+	return fmt.Sprintf(`You must respond in English only. Summarize this log chunk. Output only the key information found in the logs. Do not provide suggestions, recommendations, or improvements.
 
 Log:
 %s`, logContent)
