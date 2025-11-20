@@ -411,7 +411,7 @@ func analyzeLogWithAI(logPath string) error {
 		Title:    "Log Analysis Results",
 		Model:    analyzer.Model,
 		Content:  results.String(),
-		Duration: "see above",
+		Duration: "n/a",
 	}
 
 	rpt := report.NewReport(os.Stdout, "text")
