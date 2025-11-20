@@ -11,7 +11,7 @@ import (
 
 const (
 	OllamaDefaultURL  = "http://localhost:11434"
-	DefaultModel      = "qwen2.5:1.5b"
+	DefaultModel      = "qwen3:1.7b"
 	DefaultChunkLines = 2000
 	RequestTimeout    = 30 * time.Minute
 )
@@ -43,6 +43,16 @@ type AnalysisResult struct {
 	Findings string
 	Model    string
 	Duration time.Duration
+}
+
+// SecretAnalysisResult contains detailed analysis of a secret finding
+type SecretAnalysisResult struct {
+	SecretType      string
+	RiskLevel       string
+	Analysis        string
+	Recommendations string
+	Model           string
+	Duration        time.Duration
 }
 
 // NewAnalyzer creates a new analyzer with default settings
@@ -144,4 +154,44 @@ func (a *Analyzer) Query(prompt string) (*AnalysisResult, error) {
 		Model:    a.Model,
 		Duration: duration,
 	}, nil
+}
+
+// AnalyzeSecrets sends detected secrets to the analyzer for detailed analysis
+// It returns a structured analysis of the security implications
+func (a *Analyzer) AnalyzeSecrets(secretContent string) (*SecretAnalysisResult, error) {
+	prompt := SecretsAnalysisPrompt(secretContent)
+
+	result, err := a.Query(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &SecretAnalysisResult{
+		Analysis: result.Findings,
+		Model:    a.Model,
+		Duration: result.Duration,
+	}, nil
+}
+
+// AnalyzeLogs sends log content to the analyzer for security analysis
+func (a *Analyzer) AnalyzeLogs(logContent string) (*AnalysisResult, error) {
+	prompt := LogAnalysisPrompt(logContent)
+	return a.Query(prompt)
+}
+
+// AnalyzeCode sends code content to the analyzer for security analysis
+func (a *Analyzer) AnalyzeCode(codeContent string) (*AnalysisResult, error) {
+	prompt := CodeSecurityPrompt(codeContent)
+	return a.Query(prompt)
+}
+
+// AnalyzeConfig sends configuration content to the analyzer for security analysis
+func (a *Analyzer) AnalyzeConfig(configContent string) (*AnalysisResult, error) {
+	prompt := ConfigAnalysisPrompt(configContent)
+	return a.Query(prompt)
+}
+
+// AnalyzeWithCustomPrompt sends custom prompt content to the analyzer
+func (a *Analyzer) AnalyzeWithCustomPrompt(customPrompt string) (*AnalysisResult, error) {
+	return a.Query(customPrompt)
 }

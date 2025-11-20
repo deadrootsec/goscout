@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/deadrootsec/goscout/pkg/llm"
 	"github.com/deadrootsec/goscout/pkg/patterns"
 )
 
@@ -19,6 +20,12 @@ type Match struct {
 	LineContent string
 }
 
+// AnalyzedMatch contains a match along with AI analysis
+type AnalyzedMatch struct {
+	Match    *Match
+	Analysis *llm.AnalysisResult
+}
+
 // ScanResult contains all matches found during a scan
 type ScanResult struct {
 	Matches      []*Match
@@ -27,11 +34,21 @@ type ScanResult struct {
 	Errors       []error
 }
 
+// ScanAndAnalyzeResult contains matches with AI analysis
+type ScanAndAnalyzeResult struct {
+	AnalyzedMatches []*AnalyzedMatch
+	FilesScanned    int
+	FilesSkipped    int
+	Errors          []error
+	AnalysisErrors  []error
+}
+
 // Scanner performs the actual scanning
 type Scanner struct {
 	excludeDirs  map[string]bool
 	excludeFiles map[string]bool
 	maxFileSize  int64
+	analyzer     *llm.Analyzer
 }
 
 // NewScanner creates a new scanner instance
@@ -63,7 +80,13 @@ func NewScanner() *Scanner {
 			"go.sum":            true,
 		},
 		maxFileSize: 10 * 1024 * 1024, // 10MB
+		analyzer:    nil,
 	}
+}
+
+// SetAnalyzer sets the LLM analyzer for AI-powered analysis
+func (s *Scanner) SetAnalyzer(analyzer *llm.Analyzer) {
+	s.analyzer = analyzer
 }
 
 // AddExcludeDir adds a directory to the exclusion list
@@ -139,6 +162,57 @@ func (s *Scanner) ScanPath(path string) (*ScanResult, error) {
 	}
 
 	return result, nil
+}
+
+// ScanPathWithAnalysis scans a directory for secrets and analyzes them with AI
+func (s *Scanner) ScanPathWithAnalysis(path string) (*ScanAndAnalyzeResult, error) {
+	if s.analyzer == nil {
+		return nil, fmt.Errorf("analyzer not set: call SetAnalyzer() first")
+	}
+
+	// First, perform the initial scan
+	scanResult, err := s.ScanPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Prepare result
+	result := &ScanAndAnalyzeResult{
+		AnalyzedMatches: make([]*AnalyzedMatch, 0),
+		FilesScanned:    scanResult.FilesScanned,
+		FilesSkipped:    scanResult.FilesSkipped,
+		Errors:          scanResult.Errors,
+		AnalysisErrors:  make([]error, 0),
+	}
+
+	// Analyze each match with the LLM
+	for _, match := range scanResult.Matches {
+		analyzedMatch, err := s.analyzeMatch(match)
+		if err != nil {
+			result.AnalysisErrors = append(result.AnalysisErrors, fmt.Errorf("failed to analyze match in %s:%d: %w", match.FilePath, match.LineNumber, err))
+			continue
+		}
+		result.AnalyzedMatches = append(result.AnalyzedMatches, analyzedMatch)
+	}
+
+	return result, nil
+}
+
+// analyzeMatch sends a secret match to the analyzer for detailed analysis
+func (s *Scanner) analyzeMatch(match *Match) (*AnalyzedMatch, error) {
+	// Create a prompt that includes the matched secret and context
+	prompt := llm.SecretsAnalysisPrompt(match.LineContent)
+
+	// Query the analyzer
+	analysis, err := s.analyzer.Query(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AnalyzedMatch{
+		Match:    match,
+		Analysis: analysis,
+	}, nil
 }
 
 // scanFile scans a single file for secrets
